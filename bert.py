@@ -37,6 +37,7 @@ class BertSelfAttention(nn.Module):
     # Each attention is calculated following eq. (1) of https://arxiv.org/pdf/1706.03762.pdf.
     # Attention scores are calculated by multiplying the key and query to obtain
     # a score matrix S of size [bs, num_attention_heads, seq_len, seq_len].
+    
     # S[*, i, j, k] represents the (unnormalized) attention score between the j-th and k-th
     # token, given by i-th attention head.
     # Before normalizing the scores, use the attention mask to mask out the padding token scores.
@@ -113,7 +114,31 @@ class BertLayer(nn.Module):
     4. An add-norm operation that takes the input and output of the feed forward layer.
     """
     ### TODO
-    raise NotImplementedError
+    attention_output = self.self_attention(hidden_states, attention_mask)
+        
+        # Add-norm operation after attention.
+    attention_output = self.add_norm(
+            input=hidden_states,
+            output=attention_output,
+            dense_layer=self.attention_dense,
+            dropout=self.attention_dropout,
+            ln_layer=self.attention_layer_norm
+          )
+
+        # Feed forward layer.
+    feed_forward_output = self.interm_dense(attention_output)
+    feed_forward_output = self.interm_af(feed_forward_output)
+
+        # Add-norm operation after feed forward.
+    output = self.add_norm(
+            input=attention_output,
+            output=feed_forward_output,
+            dense_layer=self.out_dense,
+            dropout=self.out_dropout,
+            ln_layer=self.out_layer_norm
+        )
+
+    return output
 
 
 
@@ -139,7 +164,7 @@ class BertModel(BertPreTrainedModel):
     # Register position_ids (1, len position emb) to buffer because it is a constant.
     position_ids = torch.arange(config.max_position_embeddings).unsqueeze(0)
     self.register_buffer('position_ids', position_ids)
-
+    
     # BERT encoder.
     self.bert_layers = nn.ModuleList([BertLayer(config) for _ in range(config.num_hidden_layers)])
 
@@ -154,27 +179,26 @@ class BertModel(BertPreTrainedModel):
     seq_length = input_shape[1]
 
     # Get word embedding from self.word_embedding into input_embeds.
-    inputs_embeds = None
-    ### TODO
-    raise NotImplementedError
-
+    inputs_embeds = self.word_embedding
+    print("inputs_embeds")
+ 
 
     # Use pos_ids to get position embedding from self.pos_embedding into pos_embeds.
     pos_ids = self.position_ids[:, :seq_length]
-    pos_embeds = None
-    ### TODO
-    raise NotImplementedError
+    pos_embeds = self.pos_embedding
+    print("pos_embeds")
 
 
     # Get token type ids. Since we are not considering token type, this embedding is
     # just a placeholder.
     tk_type_ids = torch.zeros(input_shape, dtype=torch.long, device=input_ids.device)
     tk_type_embeds = self.tk_type_embedding(tk_type_ids)
-
+    
     # Add three embeddings together; then apply embed_layer_norm and dropout and return.
-    ### TODO
-    raise NotImplementedError
-
+    total = inputs_embeds + pos_embeds + tk_type_embeds
+    norm_layer = self.embed_layer_norm(total)
+    embed_output = self.embed_dropout(norm_layer)
+    return embed_output
 
   def encode(self, hidden_states, attention_mask):
     """
