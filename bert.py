@@ -179,13 +179,13 @@ class BertModel(BertPreTrainedModel):
     seq_length = input_shape[1]
 
     # Get word embedding from self.word_embedding into input_embeds.
-    inputs_embeds = self.word_embedding
+    inputs_embeds = self.word_embedding(input_ids)
     print("inputs_embeds")
  
 
     # Use pos_ids to get position embedding from self.pos_embedding into pos_embeds.
     pos_ids = self.position_ids[:, :seq_length]
-    pos_embeds = self.pos_embedding
+    pos_embeds = self.pos_embedding(pos_ids)
     print("pos_embeds")
 
 
@@ -194,7 +194,7 @@ class BertModel(BertPreTrainedModel):
     tk_type_ids = torch.zeros(input_shape, dtype=torch.long, device=input_ids.device)
     tk_type_embeds = self.tk_type_embedding(tk_type_ids)
     
-    # Add three embeddings together; then apply embed_layer_norm and dropout and return.
+    # Add three embeddings together; then apply embed_layer_norm and dropout and return
     total = inputs_embeds + pos_embeds + tk_type_embeds
     norm_layer = self.embed_layer_norm(total)
     embed_output = self.embed_dropout(norm_layer)
