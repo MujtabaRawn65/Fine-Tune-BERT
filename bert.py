@@ -34,15 +34,38 @@ class BertSelfAttention(nn.Module):
     return proj
 
   def attention(self, key, query, value, attention_mask):
+    """
+    Compute multi-head scaled dot-product attention.
+
+    Args:
+        key: Tensor of shape [bs, num_heads, seq_len, head_dim]
+        query: Tensor of shape [bs, num_heads, seq_len, head_dim]
+        value: Tensor of shape [bs, num_heads, seq_len, head_dim]
+        attention_mask: Tensor broadcastable to [bs, num_heads, seq_len, seq_len],
+                        with 0 for non-padding and large negative values for padding.
+
+    Returns:
+        Tensor of shape [bs, seq_len, hidden_size] where hidden_size = num_heads * head_dim.
+    """
     # Each attention is calculated following eq. (1) of https://arxiv.org/pdf/1706.03762.pdf.
     # Attention scores are calculated by multiplying the key and query to obtain
     # a score matrix S of size [bs, num_attention_heads, seq_len, seq_len].
-    
+
+    # Retrieve head dimension for scaling
+    d_k = query.size(-1)
+
+    # Compute raw attention scores using dot-product between query and key
+    # scores shape: [bs, num_heads, seq_len, seq_len]
+    S = torch.matmul(query, key.transpose(-2, -1)) / (d_k)**(1/2)
+
     # S[*, i, j, k] represents the (unnormalized) attention score between the j-th and k-th
     # token, given by i-th attention head.
     # Before normalizing the scores, use the attention mask to mask out the padding token scores.
     # Note that the attention mask distinguishes between non-padding tokens (with a value of 0)
     # and padding tokens (with a value of a large negative number).
+
+    # Apply the attention mask: Add large negative numbers to pad token positions
+    S = S + attention_mask
 
     # Make sure to:
     # - Normalize the scores with softmax.
@@ -50,8 +73,24 @@ class BertSelfAttention(nn.Module):
     # - Before returning, concatenate multi-heads to recover the original shape:
     #   [bs, seq_len, num_attention_heads * attention_head_size = hidden_size].
 
-    ### TODO
-    raise NotImplementedError
+    # Normalize the scores to probabilities using softmax on the last dimension
+    attn_probs = torch.softmax(S, dim=-1)
+
+    # Use the attention probabilities to weight the values
+    # weighted_values shape: [bs, num_heads, seq_len, head_dim]
+    weighted_values = torch.matmul(attn_probs, value)
+
+    # Concatenate multi-head outputs:
+    # First, transpose to bring the head dimension next to the sequence dimension.
+    # Then, reshape to combine the heads with the head dimension.
+    # Final shape: [bs, seq_len, num_heads * head_dim]
+    bs, num_heads, seq_len, head_dim = weighted_values.size()
+    # Transpose to shape [bs, seq_len, num_heads, head_dim]
+    weighted_values = weighted_values.transpose(1, 2).contiguous()
+    # Merge the last two dimensions to get [bs, seq_len, hidden_size]
+    output = weighted_values.view(bs, seq_len, num_heads * head_dim)
+
+    return output
 
 
   def forward(self, hidden_states, attention_mask):
@@ -91,16 +130,32 @@ class BertLayer(nn.Module):
   def add_norm(self, input, output, dense_layer, dropout, ln_layer):
     """
     This function is applied after the multi-head attention layer or the feed forward layer.
-    input: the input of the previous layer
-    output: the output of the previous layer
-    dense_layer: used to transform the output
-    dropout: the dropout to be applied 
-    ln_layer: the layer norm to be applied
+    
+    Args:
+        input: Tensor, the input of the previous layer
+        output: Tensor, the output of the previous sub-layer (e.g., attention or feed-forward)
+        dense_layer: nn.Module, used to transform the output (typically a linear layer)
+        dropout: nn.Module, the dropout layer to be applied 
+        ln_layer: nn.Module, the layer norm to be applied
+        
+    Returns:
+        Tensor after applying dense transformation, dropout, residual connection, and layer normalization.
     """
     # Hint: Remember that BERT applies dropout to the transformed output of each sub-layer,
     # before it is added to the sub-layer input and normalized with a layer norm.
-    ### TODO
-    raise NotImplementedError
+    # Transform the output using the provided dense layer.
+    transformed = dense_layer(output)
+    
+    # Apply dropout to the transformed output.
+    dropped = dropout(transformed)
+    
+    # Add the original input (residual connection) to the dropped output.
+    added = input + dropped
+    
+    # Apply layer normalization to the result of the addition.
+    normalized = ln_layer(added)
+    
+    return normalized
 
 
   def forward(self, hidden_states, attention_mask):
@@ -180,13 +235,11 @@ class BertModel(BertPreTrainedModel):
 
     # Get word embedding from self.word_embedding into input_embeds.
     inputs_embeds = self.word_embedding(input_ids)
-    print("inputs_embeds")
  
 
     # Use pos_ids to get position embedding from self.pos_embedding into pos_embeds.
     pos_ids = self.position_ids[:, :seq_length]
     pos_embeds = self.pos_embedding(pos_ids)
-    print("pos_embeds")
 
 
     # Get token type ids. Since we are not considering token type, this embedding is
