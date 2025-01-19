@@ -40,25 +40,23 @@ class BertSentimentClassifier(torch.nn.Module):
         self.bert = BertModel.from_pretrained('bert-base-uncased')
 
         # Pretrain mode does not require updating BERT paramters.
-        assert config.fine_tune_mode in ["last-linear-layer", "full-model"]
         for param in self.bert.parameters():
-            if config.fine_tune_mode == 'last-linear-layer':
-                param.requires_grad = False
-            elif config.fine_tune_mode == 'full-model':
-                param.requires_grad = True
+            param.requires_grad = config.fine_tune_mode == 'full-model'
 
-        # Create any instance variables you need to classify the sentiment of BERT embeddings.
-        ### TODO
-        raise NotImplementedError
+        
+       # Dropout for regularization and a linear layer for classification
+        self.dropout = torch.nn.Dropout(config.hidden_dropout_prob)
+        self.classifier = torch.nn.Linear(self.bert.config.hidden_size, self.num_labels)
+
 
 
     def forward(self, input_ids, attention_mask):
-        '''Takes a batch of sentences and returns logits for sentiment classes'''
-        # The final BERT contextualized embedding is the hidden state of [CLS] token (the first token).
-        # HINT: You should consider what is an appropriate return value given that
-        # the training loop currently uses F.cross_entropy as the loss function.
-        ### TODO
-        raise NotImplementedError
+        # Pass input through BERT
+        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+        cls_output = outputs.pooler_output  # Get [CLS] token embedding
+        cls_output = self.dropout(cls_output)  # Apply dropout
+        logits = self.classifier(cls_output)  # Classify sentiment
+        return logits
 
 
 
