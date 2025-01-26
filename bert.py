@@ -34,6 +34,7 @@ class BertSelfAttention(nn.Module):
     return proj
 
   def attention(self, key, query, value, attention_mask):
+    import math
     """
     Compute multi-head scaled dot-product attention.
 
@@ -46,17 +47,19 @@ class BertSelfAttention(nn.Module):
 
     Returns:
         Tensor of shape [bs, seq_len, hidden_size] where hidden_size = num_heads * head_dim.
-    """
+    """ #  Written by Mujtaba
+
+    # TODO: Mujtaba
     # Each attention is calculated following eq. (1) of https://arxiv.org/pdf/1706.03762.pdf.
     # Attention scores are calculated by multiplying the key and query to obtain
     # a score matrix S of size [bs, num_attention_heads, seq_len, seq_len].
 
-    # Retrieve head dimension for scaling
+    ## Retrieve head dimension for scaling
     d_k = query.size(-1)
 
-    # Compute raw attention scores using dot-product between query and key
-    # scores shape: [bs, num_heads, seq_len, seq_len]
-    S = torch.matmul(query, key.transpose(-2, -1)) / (d_k)**(1/2)
+    ## Compute raw attention scores using dot-product between query and key
+    ## scores shape: [bs, num_heads, seq_len, seq_len]
+    S = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
 
     # S[*, i, j, k] represents the (unnormalized) attention score between the j-th and k-th
     # token, given by i-th attention head.
@@ -64,7 +67,7 @@ class BertSelfAttention(nn.Module):
     # Note that the attention mask distinguishes between non-padding tokens (with a value of 0)
     # and padding tokens (with a value of a large negative number).
 
-    # Apply the attention mask: Add large negative numbers to pad token positions
+    ## Apply the attention mask: Add large negative numbers to pad token positions
     S = S + attention_mask
 
     # Make sure to:
@@ -73,11 +76,11 @@ class BertSelfAttention(nn.Module):
     # - Before returning, concatenate multi-heads to recover the original shape:
     #   [bs, seq_len, num_attention_heads * attention_head_size = hidden_size].
 
-    # Normalize the scores to probabilities using softmax on the last dimension
+    ## Normalize the scores to probabilities using softmax on the last dimension
     attn_probs = torch.softmax(S, dim=-1)
 
-    # Use the attention probabilities to weight the values
-    # weighted_values shape: [bs, num_heads, seq_len, head_dim]
+    ## Use the attention probabilities to weight the values
+    ## weighted_values shape: [bs, num_heads, seq_len, head_dim]
     weighted_values = torch.matmul(attn_probs, value)
 
     # Concatenate multi-head outputs:
@@ -85,9 +88,9 @@ class BertSelfAttention(nn.Module):
     # Then, reshape to combine the heads with the head dimension.
     # Final shape: [bs, seq_len, num_heads * head_dim]
     bs, num_heads, seq_len, head_dim = weighted_values.size()
-    # Transpose to shape [bs, seq_len, num_heads, head_dim]
+    ## Transpose to shape [bs, seq_len, num_heads, head_dim]
     weighted_values = weighted_values.transpose(1, 2).contiguous()
-    # Merge the last two dimensions to get [bs, seq_len, hidden_size]
+    ## Merge the last two dimensions to get [bs, seq_len, hidden_size]
     output = weighted_values.view(bs, seq_len, num_heads * head_dim)
 
     return output
@@ -140,19 +143,21 @@ class BertLayer(nn.Module):
         
     Returns:
         Tensor after applying dense transformation, dropout, residual connection, and layer normalization.
-    """
+    """ # Modified by Mujtaba
+
+    # TODO: Mujtaba
     # Hint: Remember that BERT applies dropout to the transformed output of each sub-layer,
     # before it is added to the sub-layer input and normalized with a layer norm.
     # Transform the output using the provided dense layer.
     transformed = dense_layer(output)
     
-    # Apply dropout to the transformed output.
+    ## Apply dropout to the transformed output.
     dropped = dropout(transformed)
     
-    # Add the original input (residual connection) to the dropped output.
+    ## Add the original input (residual connection) to the dropped output.
     added = input + dropped
     
-    # Apply layer normalization to the result of the addition.
+    ## Apply layer normalization to the result of the addition.
     normalized = ln_layer(added)
     
     return normalized
