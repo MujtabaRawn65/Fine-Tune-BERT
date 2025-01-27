@@ -41,21 +41,32 @@ class BertSentimentClassifier(torch.nn.Module):
 
         # Pretrain mode does not require updating BERT paramters.
         for param in self.bert.parameters():
-            param.requires_grad = config.fine_tune_mode == 'full-model'
+            param.requires_grad = config.fine_tune_mode == 'last-linear-layer'
 
+        # Create any instance variables you need to classify the sentiment of BERT embeddings.
+        ### TODO Usman
         
-       # Dropout for regularization and a linear layer for classification
         self.dropout = torch.nn.Dropout(config.hidden_dropout_prob)
-        self.classifier = torch.nn.Linear(self.bert.config.hidden_size, self.num_labels)
-
-
+        self.classifier = torch.nn.Linear(config.hidden_size, config.num_labels)
+        
 
     def forward(self, input_ids, attention_mask):
-        # Pass input through BERT
-        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
-        cls_output = outputs.pooler_output  # Get [CLS] token embedding
+        '''Takes a batch of sentences and returns logits for sentiment classes'''
+        # The final BERT contextualized embedding is the hidden state of [CLS] token (the first token).
+        # HINT: You should consider what is an appropriate return value given that
+        # the training loop currently uses F.cross_entropy as the loss function.
+        ### TODO  Usman
+        
+        outputs = self.bert(input_ids, attention_mask)
+     #  print("input ids shape",input_ids.shape)
+       #print("bert output shape: ",outputs)
+        cls_output = outputs['pooler_output']  # Get [CLS] token embedding
+     #  print("pooler output shape",cls_output.shape)
         cls_output = self.dropout(cls_output)  # Apply dropout
         logits = self.classifier(cls_output)  # Classify sentiment
+        
+        print("logits shpe", logits.shape[0])
+        
         return logits
 
 
@@ -267,7 +278,7 @@ def train(args):
         for batch in tqdm(train_dataloader, desc=f'train-{epoch}', disable=TQDM_DISABLE):
             b_ids, b_mask, b_labels = (batch['token_ids'],
                                        batch['attention_mask'], batch['labels'])
-
+           # print("b_labels shape",b_labels)
             b_ids = b_ids.to(device)
             b_mask = b_mask.to(device)
             b_labels = b_labels.to(device)
@@ -275,7 +286,7 @@ def train(args):
             optimizer.zero_grad()
             logits = model(b_ids, b_mask)
             loss = F.cross_entropy(logits, b_labels.view(-1), reduction='sum') / args.batch_size
-
+            
             loss.backward()
             optimizer.step()
 
