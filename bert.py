@@ -173,10 +173,13 @@ class BertLayer(nn.Module):
     3. A feed forward layer.
     4. An add-norm operation that takes the input and output of the feed forward layer.
     """
-    ### TODO
+    # TODO: Talha
+    ## attention_output: Tensor, shape [batch_size, seq_length, hidden_size]
+    ## Pass the hidden states through the multi-head attention mechanism to get attention output.
     attention_output = self.self_attention(hidden_states, attention_mask)
-        
-        # Add-norm operation after attention.
+
+    ## attention_output: Tensor, shape [batch_size, seq_length, hidden_size]
+    ## Apply the add-norm operation after attention to stabilize and improve training.
     attention_output = self.add_norm(
             input=hidden_states,
             output=attention_output,
@@ -185,11 +188,13 @@ class BertLayer(nn.Module):
             ln_layer=self.attention_layer_norm
           )
 
-        # Feed forward layer.
+    ## feed_forward_output: Tensor, shape [batch_size, seq_length, hidden_size]
+    ## Apply the feed-forward layer (dense layer followed by activation function).
     feed_forward_output = self.interm_dense(attention_output)
     feed_forward_output = self.interm_af(feed_forward_output)
 
-        # Add-norm operation after feed forward.
+    ## output: Tensor, shape [batch_size, seq_length, hidden_size]
+    ## Apply another add-norm operation after the feed-forward layer to finalize the output.
     output = self.add_norm(
             input=attention_output,
             output=feed_forward_output,
@@ -235,27 +240,52 @@ class BertModel(BertPreTrainedModel):
     self.init_weights()
 
   def embed(self, input_ids):
-    input_shape = input_ids.size()
-    seq_length = input_shape[1]
+    # TODO: Talha
+    ## input_shape: Tensor, shape [batch_size, seq_length]
+    ## Get the shape of the input tensor to know the batch size and sequence length.
+    input_shape = input_ids.size()  
+
+    ## seq_length: Variable, represents the length of the input sequence
+    ## Extract the sequence length from the input tensor's shape.
+    seq_length = input_shape[1]  
 
     # Get word embedding from self.word_embedding into input_embeds.
-    inputs_embeds = self.word_embedding(input_ids)
- 
+    ## inputs_embeds: Tensor, shape [batch_size, seq_length, embedding_dim]
+    ## Convert the input IDs into embeddings using the word embedding layer.
+    inputs_embeds = self.word_embedding(input_ids)  
 
     # Use pos_ids to get position embedding from self.pos_embedding into pos_embeds.
-    pos_ids = self.position_ids[:, :seq_length]
-    pos_embeds = self.pos_embedding(pos_ids)
+    ## pos_ids: Tensor, shape [batch_size, seq_length]
+    ## Slice the position IDs tensor to match the sequence length.
+    pos_ids = self.position_ids[:, :seq_length]  
 
+    ## pos_embeds: Tensor, shape [batch_size, seq_length, embedding_dim]
+    ## Retrieve position embeddings based on the position IDs.
+    pos_embeds = self.pos_embedding(pos_ids)  
 
     # Get token type ids. Since we are not considering token type, this embedding is
     # just a placeholder.
-    tk_type_ids = torch.zeros(input_shape, dtype=torch.long, device=input_ids.device)
-    tk_type_embeds = self.tk_type_embedding(tk_type_ids)
-    
+    ## tk_type_ids: Tensor, shape [batch_size, seq_length]
+    ## Initialize token type IDs to zero, as we are not using token type embeddings.
+    tk_type_ids = torch.zeros(input_shape, dtype=torch.long, device=input_ids.device)  
+
+    ## tk_type_embeds: Tensor, shape [batch_size, seq_length, embedding_dim]
+    ## Get token type embeddings (which will be zero in this case).
+    tk_type_embeds = self.tk_type_embedding(tk_type_ids)  
+
     # Add three embeddings together; then apply embed_layer_norm and dropout and return
-    total = inputs_embeds + pos_embeds + tk_type_embeds
-    norm_layer = self.embed_layer_norm(total)
-    embed_output = self.embed_dropout(norm_layer)
+    ## total: Tensor, shape [batch_size, seq_length, embedding_dim]
+    ## Combine word, position, and token type embeddings.
+    total = inputs_embeds + pos_embeds + tk_type_embeds  
+
+    ## norm_layer: Tensor, shape [batch_size, seq_length, embedding_dim]
+    ## Normalize the combined embeddings for stable training.
+    norm_layer = self.embed_layer_norm(total)  
+
+    ## embed_output: Tensor, shape [batch_size, seq_length, embedding_dim]
+    ## Apply dropout to prevent overfitting after layer normalization.
+    embed_output = self.embed_dropout(norm_layer)  
+
     return embed_output
 
   def encode(self, hidden_states, attention_mask):
