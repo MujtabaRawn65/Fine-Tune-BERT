@@ -79,12 +79,14 @@ class AdamW(Optimizer):
                 bias_correction2 = 1 - beta2 ** state["step"]
                 corrected_exp_avg_sq = exp_avg_sq / bias_correction2
 
-                # Compute denominator (sqrt(v_t_hat) + eps)
-                denom = corrected_exp_avg_sq.sqrt().add_(eps)
+                # Compute the adaptive learning rate directly (efficient version)
+                scaled_lr = lr * (1 - beta2 ** step) ** 0.5 / (1 - beta1 ** step)
 
-                #  Apply parameter update using learning rate (alpha)
+                # Compute denominator (sqrt(v_t_hat) + eps)
                 #The denominator is used to normalize the gradient making the updates invariant to the scale of the gradients.
                 denom = corrected_exp_avg_sq.sqrt().add_(eps)
+
+                p.data.addcdiv_(exp_avg, denom, value=-scaled_lr)  # Update parameters: θ_t = θ_t−1 − α_t · mt / (√vt + ϵ)
 
 
                 #  Apply weight decay after parameter update
