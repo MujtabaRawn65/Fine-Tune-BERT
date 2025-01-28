@@ -46,6 +46,23 @@ class AdamW(Optimizer):
 
                 #  Initialize state if not already initialized
                 state = self.state[p]
+                # Access hyperparameters from the `group` dictionary.
+
+                 # Complete the implementation of AdamW here, reading and saving
+                # your state in the `state` dictionary above.
+                # The hyperparameters can be read from the `group` dictionary
+                # (they are lr, betas, eps, weight_decay, as saved in the constructor).
+                #
+                # To complete this implementation:
+                # 1. Update the first and second moments of the gradients.
+                # 2. Apply bias correction
+                #    (using the "efficient version" given in https://arxiv.org/abs/1412.6980;
+                #     also given in the pseudo-code in the project description).
+                # 3. Update parameters (p.data).
+                # 4. Apply weight decay after the main gradient-based updates.
+                # Refer to the default project handout for more details.
+
+                ### TODO   TAYYAB
                 # The state dictionary is initialized for each parameter if it doesn't already exist
                 if len(state) == 0:
                     state["step"] = 0    # Tracks the number of updates (initially set to 0).
