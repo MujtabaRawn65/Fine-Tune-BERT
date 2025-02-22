@@ -40,8 +40,12 @@ class BertSentimentClassifier(torch.nn.Module):
         self.bert = BertModel.from_pretrained('bert-base-uncased')
 
         # Pretrain mode does not require updating BERT paramters.
+        assert config.fine_tune_mode in ["last-linear-layer", "full-model"]
         for param in self.bert.parameters():
-            param.requires_grad = config.fine_tune_mode == 'last-linear-layer'
+            if config.fine_tune_mode == 'last-linear-layer':
+                param.requires_grad = False
+            elif config.fine_tune_mode == 'full-model':
+                param.requires_grad = True
 
         # Create any instance variables you need to classify the sentiment of BERT embeddings.
         ### TODO Usman
@@ -58,14 +62,9 @@ class BertSentimentClassifier(torch.nn.Module):
         ### TODO  Usman
         
         outputs = self.bert(input_ids, attention_mask)
-     #  print("input ids shape",input_ids.shape)
-       #print("bert output shape: ",outputs)
         cls_output = outputs['pooler_output']  # Get [CLS] token embedding
-     #  print("pooler output shape",cls_output.shape)
         cls_output = self.dropout(cls_output)  # Apply dropout
-        logits = self.classifier(cls_output)  # Classify sentiment
-        
-        print("logits shpe", logits.shape[0])
+        logits = self.classifier(cls_output)  # Classify sentimen
         
         return logits
 
@@ -278,7 +277,7 @@ def train(args):
         for batch in tqdm(train_dataloader, desc=f'train-{epoch}', disable=TQDM_DISABLE):
             b_ids, b_mask, b_labels = (batch['token_ids'],
                                        batch['attention_mask'], batch['labels'])
-           # print("b_labels shape",b_labels)
+
             b_ids = b_ids.to(device)
             b_mask = b_mask.to(device)
             b_labels = b_labels.to(device)
@@ -286,7 +285,7 @@ def train(args):
             optimizer.zero_grad()
             logits = model(b_ids, b_mask)
             loss = F.cross_entropy(logits, b_labels.view(-1), reduction='sum') / args.batch_size
-            
+
             loss.backward()
             optimizer.step()
 
