@@ -72,8 +72,16 @@ class MultitaskBERT(nn.Module):
             elif config.fine_tune_mode == 'full-model':
                 param.requires_grad = True
         # You will want to add layers here to perform the downstream tasks.
-        ### TODO
-        raise NotImplementedError
+        ### TODO Mujtaba
+
+        ## Sentiment classifier: projects [CLS] embedding to 5 classes.
+        self.sentiment_classifier = nn.Linear(BERT_HIDDEN_SIZE, 5)
+        self.dropout = torch.nn.Dropout(config.hidden_dropout_prob)
+        
+        ## For paired tasks, we combine two [CLS] embeddings and their absolute difference.
+        ## The combined vector has dimension: hidden_size + hidden_size + hidden_size = 3 * hidden_size.
+        self.paraphrase_classifier = nn.Linear(3 * BERT_HIDDEN_SIZE, 1)
+        self.similarity_regressor = nn.Linear(3 * BERT_HIDDEN_SIZE, 1)
 
 
     def forward(self, input_ids, attention_mask):
@@ -82,8 +90,11 @@ class MultitaskBERT(nn.Module):
         # Here, you can start by just returning the embeddings straight from BERT.
         # When thinking of improvements, you can later try modifying this
         # (e.g., by adding other layers).
-        ### TODO
-        raise NotImplementedError
+        ### TODO Mujtaba
+
+        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+        cls_embedding = outputs['pooler_output']
+        return cls_embedding
 
 
     def predict_sentiment(self, input_ids, attention_mask):
@@ -92,8 +103,25 @@ class MultitaskBERT(nn.Module):
         (0 - negative, 1- somewhat negative, 2- neutral, 3- somewhat positive, 4- positive)
         Thus, your output should contain 5 logits for each sentence.
         '''
-        ### TODO
-        raise NotImplementedError
+        ### TODO Mujtaba
+        
+        cls_embedding = self.forward(input_ids, attention_mask)
+        cls_output = self.dropout(cls_embedding)  # Apply dropout
+        logits = self.sentiment_classifier(cls_output)
+        return logits
+
+
+    ### TODO Mujtaba
+    def _combine_pair(self, input_ids_1, attention_mask_1, input_ids_2, attention_mask_2):
+        '''
+        Helper method for paired inputs.
+        It computes the [CLS] embedding for each sentence and concatenates:
+        [embedding_1; embedding_2; |embedding_1 - embedding_2|]
+        '''
+        h1 = self.forward(input_ids_1, attention_mask_1)
+        h2 = self.forward(input_ids_2, attention_mask_2)
+        combined = torch.cat([h1, h2, torch.abs(h1 - h2)], dim=1)
+        return combined
 
 
     def predict_paraphrase(self,
@@ -103,8 +131,11 @@ class MultitaskBERT(nn.Module):
         Note that your output should be unnormalized (a logit); it will be passed to the sigmoid function
         during evaluation.
         '''
-        ### TODO
-        raise NotImplementedError
+        ### TODO Mujtaba
+
+        combined = self._combine_pair(input_ids_1, attention_mask_1, input_ids_2, attention_mask_2)
+        logit = self.paraphrase_classifier(combined)
+        return logit.squeeze(-1)  ## Remove singleton dimension
 
 
     def predict_similarity(self,
@@ -113,8 +144,11 @@ class MultitaskBERT(nn.Module):
         '''Given a batch of pairs of sentences, outputs a single logit corresponding to how similar they are.
         Note that your output should be unnormalized (a logit).
         '''
-        ### TODO
-        raise NotImplementedError
+        ### TODO Mujtaba
+        
+        combined = self._combine_pair(input_ids_1, attention_mask_1, input_ids_2, attention_mask_2)
+        logit = self.similarity_regressor(combined)
+        return logit.squeeze(-1)
 
 
 
