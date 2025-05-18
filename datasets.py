@@ -158,9 +158,9 @@ class SentencePairDataset(Dataset):
 
 # Unlike SentencePairDataset, we do not load labels in SentencePairTestDataset.
 class SentencePairTestDataset(Dataset):
-    def __init__(self, dataset, args):
-        self.dataset = dataset
-        self.p = args
+    def __init__(self, pairs, args):
+        self.pairs = pairs
+        self.args = args
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
     def __len__(self):
@@ -206,6 +206,36 @@ class SentencePairTestDataset(Dataset):
             }
 
         return batched_data
+    
+class ResponseSuggestionDataset(Dataset):
+    def __init__(self, message_response_pairs, args):
+        self.pairs = message_response_pairs
+        self.args = args
+        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    
+    def __len__(self):
+        return len(self.pairs)
+    
+    def __getitem__(self, idx):
+        return self.pairs[idx]
+    
+    def pad_data(self, data):
+        messages = [x[0] for x in data]  # x[0] is the message
+        responses = [x[1] for x in data]  # x[1] is the response
+        
+        # Tokenize messages and responses separately
+        msg_encoding = self.tokenizer(messages, return_tensors='pt', padding=True, truncation=True)
+        resp_encoding = self.tokenizer(responses, return_tensors='pt', padding=True, truncation=True)
+        
+        return {
+            'msg_ids': msg_encoding['input_ids'],
+            'msg_mask': msg_encoding['attention_mask'],
+            'resp_ids': resp_encoding['input_ids'],
+            'resp_mask': resp_encoding['attention_mask']
+        }
+    
+    def collate_fn(self, all_data):
+        return self.pad_data(all_data)
 
 
 def load_multitask_data(sentiment_filename,paraphrase_filename,similarity_filename,split='train'):
@@ -270,3 +300,16 @@ def load_multitask_data(sentiment_filename,paraphrase_filename,similarity_filena
     print(f"Loaded {len(similarity_data)} {split} examples from {similarity_filename}")
 
     return sentiment_data, num_labels, paraphrase_data, similarity_data
+
+
+def load_response_data(filename, split='train'):
+    """Load message-response pairs from paraphrase data"""
+    data = []
+    with open(filename, 'r') as fp:
+        for record in csv.DictReader(fp, delimiter='\t'):
+            if split == 'test':
+                data.append((record['sentence1'], record['id']))  # message, id
+            else:
+                data.append((record['sentence1'], record['sentence2'], record['id']))  # message, response, id
+    print(f"Loaded {len(data)} response pairs from {filename}")
+    return data

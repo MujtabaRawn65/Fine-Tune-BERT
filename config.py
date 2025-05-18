@@ -50,6 +50,17 @@ class PretrainedConfig(object):
     self.forced_bos_token_id = kwargs.pop("forced_bos_token_id", None)
     self.forced_eos_token_id = kwargs.pop("forced_eos_token_id", None)
 
+    response_suggestion_params = kwargs.pop('response_suggestion_params', None)
+    self.response_suggestion_params = {
+      'embedding_dim': 256,
+      'response_bias': True,
+      'num_responses': 10000,
+      **(response_suggestion_params or {})  # Properly aligned merge
+    }
+    # Validate embedding_dim
+    if not 64 <= self.response_suggestion_params['embedding_dim'] <= 768:
+      raise ValueError("embedding_dim should be between 64 and 768")
+
     # Fine-tuning task arguments
     self.architectures = kwargs.pop("architectures", None)
     self.finetuning_task = kwargs.pop("finetuning_task", None)
@@ -90,6 +101,13 @@ class PretrainedConfig(object):
         setattr(self, key, value)
       except AttributeError as err:
         raise err
+      
+    
+        
+        
+    # Initialize all other parameters
+    self.return_dict = kwargs.pop("return_dict", True)
+    self.output_hidden_states = kwargs.pop("output_hidden_states", False)
 
   @classmethod
   def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
@@ -197,13 +215,12 @@ class BertConfig(PretrainedConfig):
     type_vocab_size=2,
     initializer_range=0.02,
     layer_norm_eps=1e-12,
-    pad_token_id=0,
     gradient_checkpointing=False,
     position_embedding_type="absolute",
     use_cache=True,
     **kwargs
   ):
-    super().__init__(pad_token_id=pad_token_id, **kwargs)
+    super().__init__(**kwargs)
 
     self.vocab_size = vocab_size
     self.hidden_size = hidden_size
