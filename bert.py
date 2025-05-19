@@ -1,8 +1,46 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 from base_bert import BertPreTrainedModel
 from utils import *
+
+## LoRA class added for implementation of LoRA
+class LoRALinear(nn.Module):
+    def __init__(self, in_features, out_features, r=0, alpha=1, lora_dropout=0.0):
+        super().__init__()
+        self.r = r
+        self.alpha = alpha
+        self.scaling = alpha / r if r > 0 else 1.0
+        self.lora_dropout = nn.Dropout(lora_dropout) if r > 0 else nn.Identity()
+
+        self.weight = nn.Parameter(torch.empty(out_features, in_features))
+        nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+
+        if r > 0:
+          ## LoRA init: A has diverse weights for learning; B starts as zero to apply no update at init
+          self.lora_A = nn.Parameter(torch.empty(r, in_features))
+          self.lora_B = nn.Parameter(torch.empty(out_features, r))
+          nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
+          nn.init.zeros_(self.lora_B)
+          ## For Debugging
+          print(f"[DEBUG] lora_A requires_grad: {self.lora_A.requires_grad}")
+          print(f"Initialized LoRA: A {self.lora_A.shape}, B {self.lora_B.shape}, alpha={alpha}, r={r}, dropout={lora_dropout}")
+
+        else:
+            self.lora_A = None
+            self.lora_B = None
+
+    def forward(self, x):
+      result = F.linear(x, self.weight)
+      if self.r > 0:
+          x_dropped = self.lora_dropout(x)
+          delta = F.linear(x_dropped, self.lora_A)  
+          delta = F.linear(delta, self.lora_B) * self.scaling
+          result = result + delta
+      return result
+
+
 
 
 class BertSelfAttention(nn.Module):
@@ -13,10 +51,16 @@ class BertSelfAttention(nn.Module):
     self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
     self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-    # Initialize the linear transformation layers for key, value, query.
+    ## added r, alpha, dropout and modified self.key and self.value for LoRA
+    r = 8
+    alpha = 16
+    dropout = 0.1
+
     self.query = nn.Linear(config.hidden_size, self.all_head_size)
-    self.key = nn.Linear(config.hidden_size, self.all_head_size)
-    self.value = nn.Linear(config.hidden_size, self.all_head_size)
+    self.key = LoRALinear(config.hidden_size, self.all_head_size, r=r, alpha=alpha, lora_dropout=dropout)
+    self.value = LoRALinear(config.hidden_size, self.all_head_size, r=r, alpha=alpha, lora_dropout=dropout)
+
+
     # This dropout is applied to normalized attention scores following the original
     # implementation of transformer. Although it is a bit unusual, we empirically
     # observe that it yields better performance.
